@@ -230,7 +230,12 @@ Return only valid JSON.`;
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "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",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] }),
     });
     const data = await res.json();
@@ -721,6 +726,8 @@ export default function App() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "x-api-key": "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",
+            "anthropic-version": "2023-06-01",
             "anthropic-dangerous-direct-browser-access": "true",
           },
           body: JSON.stringify({
@@ -852,34 +859,13 @@ export default function App() {
         {step === "import" && (
           <div>
             <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: 26, color: "#1E1810", margin: "0 0 6px", lineHeight: 1.2 }}>What's in your cart?</h2>
-            <p style={{ fontSize: 14, color: "#7A6A52", margin: "0 0 20px", lineHeight: 1.6 }}>Screenshot your Amazon, Walmart, or Target cart and we'll find the same things — nearby.</p>
+            <p style={{ fontSize: 14, color: "#7A6A52", margin: "0 0 20px", lineHeight: 1.6 }}>Add items from your Amazon, Walmart, or Target cart and we'll find them at local stores nearby.</p>
 
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={e => { e.preventDefault(); setDragOver(false); handleImage(e.dataTransfer.files[0]); }}
-              onClick={() => fileRef.current.click()}
-              style={{ border: `2px dashed ${dragOver ? "#6B9E5E" : "#C8B898"}`, borderRadius: 16, padding: "32px 20px", textAlign: "center", cursor: "pointer", marginBottom: 16, background: dragOver ? "#F0F8EC" : "#FAF7F2", transition: "all 0.2s" }}>
-              <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImage(e.target.files[0])} />
-              {isAnalyzing ? (
-                <div><div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div><div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 16, color: "#2C2416" }}>Scanning your cart...</div><div style={{ fontSize: 13, color: "#8C7A5E", marginTop: 6 }}>Claude is reading your screenshot</div></div>
-              ) : previewImg ? (
-                <div><img src={previewImg} alt="Cart screenshot" style={{ maxWidth: "100%", maxHeight: 180, borderRadius: 8, marginBottom: 10 }} /><div style={{ fontSize: 13, color: "#6B9E5E" }}>✓ Screenshot uploaded</div></div>
-              ) : (
-                <div><div style={{ fontSize: 40, marginBottom: 10 }}>📸</div><div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 16, color: "#2C2416", marginBottom: 4 }}>Drop a cart screenshot</div><div style={{ fontSize: 13, color: "#8C7A5E" }}>or tap to choose from your device</div><div style={{ fontSize: 11, color: "#B0A088", marginTop: 8 }}>Works with Amazon, Walmart & Target</div></div>
-              )}
-            </div>
-
-            {parseError && (
-              <div style={{ padding: "10px 14px", background: "#FAF0EE", border: "1px solid #E8C8C0", borderRadius: 10, marginBottom: 16, fontSize: 13, color: "#8B3A2A", lineHeight: 1.5 }}>
-                ⚠ {parseError}
-              </div>
-            )}
-
+            {/* Items list — always shown */}
             {items.length > 0 && (
-              <div>
+              <div style={{ marginBottom: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#2C2416" }}>Your cart ({items.length} items)</div>
+                  <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: 18, color: "#2C2416" }}>Your cart ({items.length} item{items.length !== 1 ? "s" : ""})</div>
                   <div style={{ fontFamily: "monospace", fontSize: 14, color: "#4A3728" }}>${cartTotal.toFixed(2)}</div>
                 </div>
                 {items.map(item => (
@@ -887,11 +873,47 @@ export default function App() {
                     onRemove={id => setItems(items.filter(i => i.id !== id))}
                     onUpdate={updated => setItems(items.map(i => i.id === updated.id ? updated : i))} />
                 ))}
-                <AddItemRow onAdd={newItem => setItems(prev => [...prev, newItem])} />
-                <button onClick={() => setStep("preferences")} style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#3A5A30", color: "#EAF3E8", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Serif Display', serif", marginTop: 8 }}>
-                  Set my preferences →
-                </button>
               </div>
+            )}
+
+            {/* Add item — always visible */}
+            <AddItemRow onAdd={newItem => setItems(prev => [...prev, newItem])} />
+
+            {/* Screenshot upload — collapsed by default */}
+            <details style={{ marginBottom: 16 }}>
+              <summary style={{ fontSize: 13, color: "#8C7A5E", cursor: "pointer", padding: "8px 0", listStyle: "none", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>📸</span>
+                <span>Or import from a cart screenshot</span>
+                <span style={{ marginLeft: "auto", fontSize: 11 }}>▼</span>
+              </summary>
+              <div style={{ marginTop: 10 }}>
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={e => { e.preventDefault(); setDragOver(false); handleImage(e.dataTransfer.files[0]); }}
+                  onClick={() => fileRef.current.click()}
+                  style={{ border: `2px dashed ${dragOver ? "#6B9E5E" : "#C8B898"}`, borderRadius: 16, padding: "24px 20px", textAlign: "center", cursor: "pointer", background: dragOver ? "#F0F8EC" : "#FAF7F2", transition: "all 0.2s" }}>
+                  <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleImage(e.target.files[0])} />
+                  {isAnalyzing ? (
+                    <div><div style={{ fontSize: 28, marginBottom: 8 }}>🔍</div><div style={{ fontSize: 14, color: "#2C2416" }}>Scanning your cart...</div></div>
+                  ) : previewImg ? (
+                    <div><img src={previewImg} alt="Cart screenshot" style={{ maxWidth: "100%", maxHeight: 140, borderRadius: 8, marginBottom: 8 }} /><div style={{ fontSize: 13, color: "#6B9E5E" }}>✓ Screenshot uploaded</div></div>
+                  ) : (
+                    <div><div style={{ fontSize: 32, marginBottom: 8 }}>📸</div><div style={{ fontSize: 14, color: "#2C2416", marginBottom: 3 }}>Drop a cart screenshot</div><div style={{ fontSize: 12, color: "#8C7A5E" }}>Works with Amazon, Walmart & Target</div></div>
+                  )}
+                </div>
+                {parseError && (
+                  <div style={{ padding: "10px 14px", background: "#FAF0EE", border: "1px solid #E8C8C0", borderRadius: 10, marginTop: 10, fontSize: 13, color: "#8B3A2A", lineHeight: 1.5 }}>
+                    ⚠ {parseError}
+                  </div>
+                )}
+              </div>
+            </details>
+
+            {items.length > 0 && (
+              <button onClick={() => setStep("preferences")} style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", background: "#3A5A30", color: "#EAF3E8", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Serif Display', serif" }}>
+                Set my preferences →
+              </button>
             )}
           </div>
         )}
