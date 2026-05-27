@@ -1,15 +1,6 @@
-import "./index.css";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 const GOOGLE_API_KEY = "AIzaSyBNh3_TS9nwiVk7jjUlk97p5PkRxTdW61U";
-
-const MOCK_ITEMS = [
-  { id: 1, name: "Cast Iron Skillet 10\"", brand: "Lodge", price: 34.99, category: "Kitchen", image: "🍳" },
-  { id: 2, name: "Organic Cotton Bath Towels (2pk)", brand: "AmazonBasics", price: 22.49, category: "Home", image: "🛁" },
-  { id: 3, name: "Ceramic Pour-Over Coffee Maker", brand: "Hario", price: 45.00, category: "Kitchen", image: "☕" },
-  { id: 4, name: "Beeswax Food Wraps Set", brand: "Bee's Wrap", price: 18.00, category: "Kitchen", image: "🍯" },
-  { id: 5, name: "Merino Wool Socks (3pk)", brand: "Darn Tough", price: 52.00, category: "Clothing", image: "🧦" },
-];
 
 const CATEGORY_TO_SEARCHES = {
   Kitchen: ["kitchen supply store", "cookware store", "home goods store"],
@@ -696,6 +687,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [previewImg, setPreviewImg] = useState(null);
+  const [parseError, setParseError] = useState(null);
   const [expandedStore, setExpandedStore] = useState(null);
   const [stores, setStores] = useState([]);
   const [loadingStage, setLoadingStage] = useState(null);
@@ -723,10 +715,14 @@ export default function App() {
       const base64 = e.target.result.split(",")[1];
       setPreviewImg(e.target.result);
       setIsAnalyzing(true);
+      setParseError(null);
       try {
         const res = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
           body: JSON.stringify({
             model: "claude-sonnet-4-20250514",
             max_tokens: 1000,
@@ -736,11 +732,20 @@ export default function App() {
             ]}]
           })
         });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `API error ${res.status}`);
+        }
         const data = await res.json();
         const text = data.content.find(b => b.type === "text")?.text || "[]";
         const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+        if (!parsed.length) throw new Error("No items found in screenshot. Try a clearer image.");
         setItems(parsed.map((item, i) => ({ ...item, id: i + 1, image: categoryEmoji(item.category) })));
-      } catch { setItems(MOCK_ITEMS); }
+        setPreviewImg(e.target.result);
+      } catch (err) {
+        setPreviewImg(null);
+        setParseError(err.message || "Couldn't read the screenshot. Please try again.");
+      }
       finally { setIsAnalyzing(false); }
     };
     reader.readAsDataURL(file);
@@ -865,9 +870,11 @@ export default function App() {
               )}
             </div>
 
-            <button onClick={() => setItems(MOCK_ITEMS)} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1.5px solid #C8B898", background: "transparent", color: "#6A5A4A", fontSize: 14, cursor: "pointer", fontFamily: "inherit", marginBottom: 20 }}>
-              Use sample cart instead →
-            </button>
+            {parseError && (
+              <div style={{ padding: "10px 14px", background: "#FAF0EE", border: "1px solid #E8C8C0", borderRadius: 10, marginBottom: 16, fontSize: 13, color: "#8B3A2A", lineHeight: 1.5 }}>
+                ⚠ {parseError}
+              </div>
+            )}
 
             {items.length > 0 && (
               <div>
