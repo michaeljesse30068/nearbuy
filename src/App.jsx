@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
+// Google Maps JS API key (Maps display only - Places/Geocoding go through backend proxy)
 const GOOGLE_API_KEY = "AIzaSyBNh3_TS9nwiVk7jjUlk97p5PkRxTdW61U";
 
 const CATEGORY_TO_SEARCHES = {
@@ -52,13 +53,9 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
 
   await Promise.all(uniqueQueries.map(async (query) => {
     try {
-      const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      const res = await fetch("/api/places", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": GOOGLE_API_KEY,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.businessStatus",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           textQuery: query,
           locationBias: { circle: { center: { latitude: lat, longitude: lng }, radiusMeters } },
@@ -130,64 +127,12 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
   return stores.sort((a, b) => a.distance - b.distance).slice(0, 12);
 }
 
-const CITY_COORDS = {
-  "denver": { lat: 39.7392, lng: -104.9903, label: "Denver, CO" },
-  "denver co": { lat: 39.7392, lng: -104.9903, label: "Denver, CO" },
-  "boulder": { lat: 40.0150, lng: -105.2705, label: "Boulder, CO" },
-  "boulder co": { lat: 40.0150, lng: -105.2705, label: "Boulder, CO" },
-  "new york": { lat: 40.7128, lng: -74.0060, label: "New York, NY" },
-  "brooklyn": { lat: 40.6782, lng: -73.9442, label: "Brooklyn, NY" },
-  "brooklyn ny": { lat: 40.6782, lng: -73.9442, label: "Brooklyn, NY" },
-  "los angeles": { lat: 34.0522, lng: -118.2437, label: "Los Angeles, CA" },
-  "la": { lat: 34.0522, lng: -118.2437, label: "Los Angeles, CA" },
-  "chicago": { lat: 41.8781, lng: -87.6298, label: "Chicago, IL" },
-  "austin": { lat: 30.2672, lng: -97.7431, label: "Austin, TX" },
-  "austin tx": { lat: 30.2672, lng: -97.7431, label: "Austin, TX" },
-  "portland": { lat: 45.5051, lng: -122.6750, label: "Portland, OR" },
-  "portland or": { lat: 45.5051, lng: -122.6750, label: "Portland, OR" },
-  "seattle": { lat: 47.6062, lng: -122.3321, label: "Seattle, WA" },
-  "san francisco": { lat: 37.7749, lng: -122.4194, label: "San Francisco, CA" },
-  "sf": { lat: 37.7749, lng: -122.4194, label: "San Francisco, CA" },
-  "boston": { lat: 42.3601, lng: -71.0589, label: "Boston, MA" },
-  "miami": { lat: 25.7617, lng: -80.1918, label: "Miami, FL" },
-  "nashville": { lat: 36.1627, lng: -86.7816, label: "Nashville, TN" },
-  "atlanta": { lat: 33.7490, lng: -84.3880, label: "Atlanta, GA" },
-  "phoenix": { lat: 33.4484, lng: -112.0740, label: "Phoenix, AZ" },
-  "minneapolis": { lat: 44.9778, lng: -93.2650, label: "Minneapolis, MN" },
-  "dallas": { lat: 32.7767, lng: -96.7970, label: "Dallas, TX" },
-  "houston": { lat: 29.7604, lng: -95.3698, label: "Houston, TX" },
-  // zip codes (first 3 digits = region)
-  "802": { lat: 39.7392, lng: -104.9903, label: "Denver, CO" },
-  "800": { lat: 39.7392, lng: -104.9903, label: "Denver area, CO" },
-  "100": { lat: 40.7128, lng: -74.0060, label: "New York, NY" },
-  "112": { lat: 40.6782, lng: -73.9442, label: "Brooklyn, NY" },
-  "900": { lat: 34.0522, lng: -118.2437, label: "Los Angeles, CA" },
-  "606": { lat: 41.8781, lng: -87.6298, label: "Chicago, IL" },
-  "787": { lat: 30.2672, lng: -97.7431, label: "Austin, TX" },
-  "972": { lat: 45.5051, lng: -122.6750, label: "Portland, OR" },
-  "981": { lat: 47.6062, lng: -122.3321, label: "Seattle, WA" },
-  "941": { lat: 37.7749, lng: -122.4194, label: "San Francisco, CA" },
-};
-
-function geocodeLocation(query) {
-  const q = query.toLowerCase().trim().replace(/\s+/g, " ");
-  // Direct city match
-  if (CITY_COORDS[q]) return Promise.resolve(CITY_COORDS[q]);
-  // Strip state abbreviation variations like "denver, co" -> "denver co"
-  const normalized = q.replace(/,\s*/g, " ").trim();
-  if (CITY_COORDS[normalized]) return Promise.resolve(CITY_COORDS[normalized]);
-  // Zip code - try full 5-digit first, then 3-digit prefix
-  const zipMatch = q.match(/\b(\d{5})\b/);
-  if (zipMatch) {
-    const zip = zipMatch[1];
-    if (CITY_COORDS[zip]) return Promise.resolve(CITY_COORDS[zip]);
-    const prefix = zip.slice(0, 3);
-    if (CITY_COORDS[prefix]) return Promise.resolve(CITY_COORDS[prefix]);
-  }
-  // Partial city match
-  const partial = Object.keys(CITY_COORDS).find(k => k.includes(q) || q.includes(k));
-  if (partial) return Promise.resolve(CITY_COORDS[partial]);
-  return Promise.reject(new Error("City not found. Try: Denver, Brooklyn, Austin, Portland, Seattle, Chicago, Boston, Miami, Nashville, Atlanta, or Dallas."));
+async function geocodeLocation(query) {
+  const res = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error("Location not found. Try a city name or zip code.");
+  const data = await res.json();
+  if (data.error) throw new Error("Location not found. Try a city name or zip code.");
+  return data;
 }
 
 // --- Impact Calculator ---
