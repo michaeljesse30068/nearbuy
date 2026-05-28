@@ -59,7 +59,7 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           textQuery: query,
-          locationBias: { circle: { center: { latitude: lat, longitude: lng }, radiusMeters } },
+          locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: radiusMeters } },
           maxResultCount: 8,
         }),
       });
