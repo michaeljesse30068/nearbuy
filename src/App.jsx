@@ -51,6 +51,7 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
   const radiusMeters = Math.min(maxDistanceMiles * 1609, 50000);
   const placeMap = new Map();
 
+  let placesError = null;
   await Promise.all(uniqueQueries.map(async (query) => {
     try {
       const res = await fetch("/api/places", {
@@ -63,12 +64,15 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
         }),
       });
       const data = await res.json();
+      if (data.error) { placesError = `API error: ${data.error} — ${data.detail || ""}`; return; }
       if (data.places) {
         data.places.forEach(p => {
           if (!placeMap.has(p.id) && p.businessStatus === "OPERATIONAL") placeMap.set(p.id, p);
         });
+      } else {
+        placesError = `No places field. Raw: ${JSON.stringify(data).slice(0, 200)}`;
       }
-    } catch (e) {}
+    } catch (e) { placesError = `Fetch failed: ${e.message}`; }
   }));
 
   const stores = [];
@@ -124,7 +128,7 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
       });
     });
   }
-  return stores.sort((a, b) => a.distance - b.distance).slice(0, 12);
+  return { stores: stores.sort((a, b) => a.distance - b.distance).slice(0, 12), placesError };
 }
 
 async function geocodeLocation(query) {
@@ -711,13 +715,17 @@ export default function App() {
     setLoadingStage("places");
     setDebugMsg(null);
     try {
-      const rawStores = await fetchNearbyStores(lat, lng, items, prefs.maxDistance);
-      setDebugMsg(`Places returned ${rawStores.length} stores. First: ${rawStores[0]?.name || "none"}. IDs start with: ${rawStores[0]?.id?.slice(0,8) || "n/a"}`);
+      const { stores: rawStores, placesError } = await fetchNearbyStores(lat, lng, items, prefs.maxDistance);
+      if (placesError) {
+        setDebugMsg(`⚠ Places error: ${placesError}`);
+      } else {
+        setDebugMsg(`✓ Places returned ${rawStores.length} stores. First: ${rawStores[0]?.name || "none"}`);
+      }
       setLoadingStage("matching");
       const matched = await matchItemsToStores(rawStores, items);
       setStores(matched);
     } catch (err) {
-      setDebugMsg(`Error: ${err.message}`);
+      setDebugMsg(`⚠ Error: ${err.message}`);
     }
     setLoadingStage(null);
   }, [items, prefs.maxDistance]);
