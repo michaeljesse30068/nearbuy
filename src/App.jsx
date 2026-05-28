@@ -64,13 +64,20 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
         }),
       });
       const data = await res.json();
-      if (data.error) { placesError = `API error: ${data.error} — ${data.detail || ""}`; return; }
+      if (data._status && data._status !== 200) {
+        placesError = `Google HTTP ${data._status}: ${JSON.stringify(data).slice(0, 400)}`;
+        return;
+      }
+      if (data.error) {
+        placesError = `Google error: ${JSON.stringify(data).slice(0, 400)}`;
+        return;
+      }
       if (data.places) {
         data.places.forEach(p => {
           if (!placeMap.has(p.id) && p.businessStatus === "OPERATIONAL") placeMap.set(p.id, p);
         });
-      } else {
-        placesError = `No places field. Raw: ${JSON.stringify(data).slice(0, 200)}`;
+      } else if (!placesError) {
+        placesError = `No places returned. Full response: ${JSON.stringify(data).slice(0, 400)}`;
       }
     } catch (e) { placesError = `Fetch failed: ${e.message}`; }
   }));
@@ -99,33 +106,6 @@ async function fetchNearbyStores(lat, lng, items, maxDistanceMiles) {
       color: storeColor(type),
       markerColor: storeMarkerColor(type),
       mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${p.id}`,
-    });
-  }
-  if (stores.length === 0) {
-    // Preview fallback: generate plausible mock stores near the given coordinates
-    const mockTemplates = [
-      { name: "The Kitchen Collective", type: "mom-and-pop", ratingBase: 4.8, reviewsBase: 240, hoursNote: "Tue–Sun 10–6" },
-      { name: "Hearth & Home Supply", type: "mom-and-pop", ratingBase: 4.6, reviewsBase: 180, hoursNote: "Mon–Sat 9–7" },
-      { name: "Local Goods Market", type: "mom-and-pop", ratingBase: 4.7, reviewsBase: 310, hoursNote: "Daily 10–6" },
-      { name: "REI Co-op", type: "chain", ratingBase: 4.5, reviewsBase: 3200, hoursNote: "Daily 10–8" },
-      { name: "Williams-Sonoma", type: "chain", ratingBase: 4.3, reviewsBase: 890, hoursNote: "Daily 10–8" },
-      { name: "Target", type: "big-box", ratingBase: 3.9, reviewsBase: 7400, hoursNote: "Daily 8–10" },
-      { name: "Walmart", type: "big-box", ratingBase: 3.7, reviewsBase: 5200, hoursNote: "Daily 7–11" },
-    ];
-    const offsets = [[0.008, 0.012], [0.015, -0.008], [-0.010, 0.018], [0.022, 0.005], [-0.018, -0.014], [0.030, 0.025], [-0.028, 0.032]];
-    mockTemplates.forEach((t, i) => {
-      const [dlat, dlng] = offsets[i];
-      const slat = lat + dlat, slng = lng + dlng;
-      const dist = Math.round(distanceMiles(lat, lng, slat, slng) * 10) / 10;
-      if (dist > maxDistanceMiles) return;
-      stores.push({
-        id: `mock-${i}`, name: t.name, type: t.type,
-        distance: dist, address: `Near ${lat.toFixed(3)}, ${lng.toFixed(3)}`,
-        rating: t.ratingBase, reviews: t.reviewsBase, hours: t.hoursNote,
-        lat: slat, lng: slng, matches: [], alternatives: {}, savings: 0,
-        color: storeColor(t.type), markerColor: storeMarkerColor(t.type),
-        mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.name + " " + lat + " " + lng)}`,
-      });
     });
   }
   return { stores: stores.sort((a, b) => a.distance - b.distance).slice(0, 12), placesError };
