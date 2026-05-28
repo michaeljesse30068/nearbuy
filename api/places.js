@@ -20,13 +20,16 @@ function httpsPost(url, headers, body) {
   });
 }
 
-function httpsGet(url) {
+function parseBody(req) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = "";
-      res.on("data", (chunk) => data += chunk);
-      res.on("end", () => resolve(JSON.parse(data)));
-    }).on("error", reject);
+    if (req.body) return resolve(req.body);
+    let data = "";
+    req.on("data", (chunk) => data += chunk);
+    req.on("end", () => {
+      try { resolve(JSON.parse(data)); }
+      catch (e) { resolve({}); }
+    });
+    req.on("error", reject);
   });
 }
 
@@ -40,7 +43,8 @@ module.exports = async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: "API key not configured" });
 
   try {
-    const { textQuery, locationBias, maxResultCount } = req.body;
+    const parsed = await parseBody(req);
+    const { textQuery, locationBias, maxResultCount } = parsed;
     const body = JSON.stringify({ textQuery, locationBias, maxResultCount });
     const data = await httpsPost(
       "https://places.googleapis.com/v1/places:searchText",
