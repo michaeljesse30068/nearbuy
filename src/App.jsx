@@ -705,12 +705,20 @@ export default function App() {
 
   const categoryEmoji = (cat) => ({ Kitchen: "🍳", Home: "🏠", Clothing: "👕", Electronics: "💻", Garden: "🌱", Food: "🥘", Beauty: "✨", Sports: "⚽" }[cat] || "📦");
 
+  const [debugMsg, setDebugMsg] = useState(null);
+
   const runSearch = useCallback(async (lat, lng) => {
     setLoadingStage("places");
-    const rawStores = await fetchNearbyStores(lat, lng, items, prefs.maxDistance);
-    setLoadingStage("matching");
-    const matched = await matchItemsToStores(rawStores, items);
-    setStores(matched);
+    setDebugMsg(null);
+    try {
+      const rawStores = await fetchNearbyStores(lat, lng, items, prefs.maxDistance);
+      setDebugMsg(`Places returned ${rawStores.length} stores. First: ${rawStores[0]?.name || "none"}. IDs start with: ${rawStores[0]?.id?.slice(0,8) || "n/a"}`);
+      setLoadingStage("matching");
+      const matched = await matchItemsToStores(rawStores, items);
+      setStores(matched);
+    } catch (err) {
+      setDebugMsg(`Error: ${err.message}`);
+    }
     setLoadingStage(null);
   }, [items, prefs.maxDistance]);
 
@@ -997,7 +1005,11 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* Cart total bar */}
+                {debugMsg && (
+                  <div style={{ padding: "10px 14px", background: "#2C2416", borderRadius: 10, marginBottom: 12, fontSize: 12, color: "#8CC878", fontFamily: "monospace", lineHeight: 1.5 }}>
+                    🔍 {debugMsg}
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", background: "#2C2416", borderRadius: 10, padding: "10px 14px", marginBottom: 16 }}>
                   <div style={{ fontSize: 13, color: "#8C7A5E" }}>Your online cart total</div>
                   <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#EDE8DC" }}>${cartTotal.toFixed(2)}</div>
