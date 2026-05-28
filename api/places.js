@@ -1,28 +1,31 @@
 const https = require("https");
 
-function httpsPost(url, headers, body) {
+function httpsPost(url, headers, bodyStr) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
     const options = {
       hostname: urlObj.hostname,
       path: urlObj.pathname,
       method: "POST",
-      headers: { ...headers, "Content-Length": Buffer.byteLength(body) },
+      headers: { ...headers, "Content-Length": Buffer.byteLength(bodyStr) },
     };
     const req = https.request(options, (res) => {
       let data = "";
       res.on("data", (chunk) => data += chunk);
-      res.on("end", () => resolve(JSON.parse(data)));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch (e) { resolve({ status: res.statusCode, body: { rawText: data.slice(0, 500) } }); }
+      });
     });
     req.on("error", reject);
-    req.write(body);
+    req.write(bodyStr);
     req.end();
   });
 }
 
 function parseBody(req) {
   return new Promise((resolve, reject) => {
-    if (req.body) return resolve(req.body);
+    if (req.body && typeof req.body === "object") return resolve(req.body);
     let data = "";
     req.on("data", (chunk) => data += chunk);
     req.on("end", () => {
@@ -45,17 +48,22 @@ module.exports = async function handler(req, res) {
   try {
     const parsed = await parseBody(req);
     const { textQuery, locationBias, maxResultCount } = parsed;
-    const body = JSON.stringify({ textQuery, locationBias, maxResultCount });
-    const data = await httpsPost(
+
+    if (!textQuery) return res.status(400).json({ error: "Missing textQuery" });
+
+    const bodyStr = JSON.stringify({ textQuery, locationBias, maxResultCount });
+    const { status, body } = await httpsPost(
       "https://places.googleapis.com/v1/places:searchText",
       {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.regularOpeningHours,places.businessStatus",
       },
-      body
+      bodyStr
     );
-    return res.status(200).json(data);
+
+    // Always return the full response so frontend can debug
+    return res.status(200).json({ ...body, _status: status });
   } catch (err) {
     return res.status(500).json({ error: "Places search failed", detail: err.message });
   }
